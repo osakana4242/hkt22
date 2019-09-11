@@ -10,10 +10,15 @@ GameObjectType.PLAYER_BULLET = 2;
 GameObjectType.ENEMY = 3;
 GameObjectType.EFFECT = 4;
 GameObjectType.STONE = 5;
-class Player {
+class Component {
+    constructor(go) {
+        this.entityId = go.instanceId;
+    }
+}
+class Player extends Component {
     constructor() {
-        this.freezeTime = 0;
-        this.freezeDuration = 300;
+        super(...arguments);
+        this.score = 0;
         this.selectedBankId = 0;
         this.selectedPotId = 0;
         this.selectedCustomerId = 0;
@@ -37,6 +42,7 @@ class GameObject {
         this.pot = null;
         this.chair = null;
         this.tray = null;
+        this.noodleTimer = null;
         this.effect = null;
         this.player = null;
         this.collider = null;
@@ -47,8 +53,14 @@ class GameObject {
     }
 }
 GameObject.autoIncrement = 0;
-class Noodle {
+class NoodleTimer {
     constructor() {
+        this.timerIndex = 0;
+    }
+}
+class Noodle extends Component {
+    constructor() {
+        super(...arguments);
         /** テーブル番号 or 鍋番号 */
         this.ownerId = 0;
         /** 茹でた時間 */
@@ -72,12 +84,15 @@ CustomerState.EAT = 6;
 /** 退店 */
 CustomerState.EXIT_SHOP = 7;
 /** 客 */
-class Customer {
+class Customer extends Component {
     constructor() {
+        super(...arguments);
+        this.waitIndex = 0;
         this.chairId = 0;
         this.trayId = 0;
         /** 注文した茹でLv */
         this.orderedBoilLv = 0;
+        this.reactionLv = 1;
         this.state = CustomerState.ENTER_SHOP;
         this.stateTime = 0;
     }
@@ -98,7 +113,7 @@ class Chair {
 class Pot {
 }
 /** 麺のストック */
-class Bank {
+class Bank extends Component {
 }
 class Life {
     constructor() {

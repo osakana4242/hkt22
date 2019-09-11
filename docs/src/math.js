@@ -85,6 +85,39 @@ class Vector2Helper {
     static add(a, b) {
         return Vector2(a.x + b.x, a.y + b.y);
     }
+    static setMoveTo(self, b, maxSpeed) {
+        const ax = self.x;
+        const ay = self.y;
+        const dx = b.x - ax;
+        const dy = b.y - ay;
+        const sqrDistance = dx * dx + dy * dy;
+        if (sqrDistance < maxSpeed * maxSpeed) {
+            self.x = b.x;
+            self.y = b.y;
+            return self;
+        }
+        const distance = Math.sqrt(sqrDistance);
+        const mx = dx * maxSpeed / distance;
+        const my = dy * maxSpeed / distance;
+        self.x = ax + mx;
+        self.y = ay + my;
+        return self;
+    }
+    static getMoveTo(a, b, maxSpeed) {
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const sqrDistance = dx * dx + dy * dy;
+        const c = Vector2(b.x, b.y);
+        if (sqrDistance < maxSpeed * maxSpeed) {
+            return c;
+        }
+        const distance = Math.sqrt(sqrDistance);
+        const mx = dx * maxSpeed / distance;
+        const my = dy * maxSpeed / distance;
+        c.x = a.x + mx;
+        c.y = a.y + my;
+        return c;
+    }
 }
 class SpriteHelper {
     static setPriority(elem, priority) {

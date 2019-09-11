@@ -12,15 +12,22 @@ var ASSETS = {
 		"obj_tray": "./img/obj_tray.png",
 		"obj_bank": "./img/obj_bank.png",
 		"obj_customer": "./img/obj_customer.png",
-		"obj_noodle": "./img/obj_noodle.png",
+		"obj_noodle_01": "./img/obj_noodle_01.png",
+		"obj_noodle_02": "./img/obj_noodle_02.png",
+		"obj_clock_body": "./img/obj_clock_body.png",
+		"obj_clock_needle": "./img/obj_clock_needle.png",
 		"obj_pot": "./img/obj_pot.png",
 		"order_01": "./img/order_01.png",
 		"order_02": "./img/order_02.png",
 		"order_03": "./img/order_03.png",
+		"reaction_01": "./img/reaction_01.png",
+		"reaction_02": "./img/reaction_02.png",
+		"reaction_03": "./img/reaction_03.png",
 		"bg_01": "./img/bg_01.png",
 	},
 	spritesheet: {
 		"obj": "./img/obj.ss.json",
+		"obj_customer": "./img/obj_customer.ss.json",
 	},
 };
 
@@ -79,21 +86,14 @@ interface EnemyData {
 }
 
 class QuestWork {
-	/** 0 = 相手; 1 = 自分 */
-	state = 0;
-	questIndex = 0;
-	blockIndex = 0;
-	noteIndex = 0;
-	loopCount = 0;
-	barTime = 0;
+	isPlyaing = false;
+	waveTime = 0;
 	time = 0;
+	duration = 1000 * 180;
+	waveIndex = 0;
 
-	getQuestData() {
-		return questDataArr[this.questIndex];
-	}
-
-	getBpm() {
-		return this.getQuestData().bpm + (this.loopCount * 20);
+	getRestTime() {
+		return Math.max(0, this.duration - this.time);
 	}
 }
 
@@ -108,6 +108,7 @@ class HogeScene {
 	mainLabel: Label;
 	centerTelop: Label;
 	goArr: GameObject[] = [];
+	goDict: { [index: number]: GameObject } = {};
 	stageLeft = 0;
 	enemyRect = new Rect(-64, -64, DF.SC_W + 160, DF.SC_H + 128);
 	screenRect = new Rect(0, 0, DF.SC_W, DF.SC_H);
@@ -115,7 +116,16 @@ class HogeScene {
 	isStarted = false;
 	isEnd = false;
 	sm = new StateMachine();
-
+	/** 立って待つ客の位置 */
+	standWaitPosArr = [
+		Vector2(220, 48),
+		Vector2(180, 48),
+		Vector2(140, 48),
+		Vector2(100, 48),
+		Vector2(60, 48),
+		Vector2(20, 48),
+	];
+	customerEnterPos = Vector2(-40, 48);
 
 	enemyDataDict: { [index: string]: EnemyData } = {
 		'enm_1': {
@@ -133,17 +143,12 @@ class HogeScene {
 	playerBulletSpeed = 8;
 
 	questWork = new QuestWork();
-	score = 0;
 	hasPause = false;
-	lastLine: PathShape | null = null;
-	playerLineIndex = 0;
-	playerLineStartTime = 0;
-	playerHp = 3;
-	playerHasDamage = false;
 	cursor: RectangleShape;
 	btnPotArr: GameObject[];
 	lastPointBtn: GameObject | null = null;
-	player: GameObject;
+	player: Player;
+	bank: Bank;
 
 
 	constructor(pScene: phina.display.DisplayScene) {
@@ -163,9 +168,9 @@ class HogeScene {
 
 		{
 			const go = new GameObject();
-			go.player = new Player();
+			go.player = new Player(go);
 			this.goArr.push(go);
-			this.player = go;
+			this.player = go.player;
 		}
 
 		{
@@ -177,38 +182,43 @@ class HogeScene {
 		}
 
 		{
-			var potPosArr = [
-				[4, 32],
-				[44, 32],
-				[84, 32],
-				[124, 32],
-				[164, 32],
-				[204, 32],
-			];
-			this.btnPotArr = [];
-			potPosArr.forEach((_item, _i) => {
-				const sprite = Sprite("obj_customer");
-				sprite.addChildTo(pScene);
-				var go = new GameObject();
-				go.sprite = sprite;
-				SpriteHelper.setPriority(go.sprite, 20);
-				go.customer = new Customer();
-				go.customer.orderedBoilLv = 1;
-				go.customer.state = CustomerState.STAND_WAIT;
-				go.tr.position.x = _item[0] + 16;
-				go.tr.position.y = _item[1] + 16;
-				this.goArr.push(go);
-				this.btnPotArr.push(go);
-				sprite.setInteractive(true, sprite.boundingType);
-				sprite.addEventListener("pointstart", () => {
-					//console.log("touch: " + go.instanceId);
-					this.lastPointBtn = go;
-				});
-			});
+			var func = (_i: number) => {
+				const layer = DisplayElement();
+				layer.width = 16;
+				layer.height = 16;
+				const bg = Sprite("obj_clock_body");
+				const needle = Sprite("obj_clock_needle");
+				layer.addChild(bg);
+				layer.addChild(needle);
+				layer.addChildTo(pScene);
+				SpriteHelper.setPriority(layer, 310);
+				const go = new GameObject();
+				go.noodleTimer = new NoodleTimer();
+				go.noodleTimer.timerIndex = _i;
+				go.sprite = layer;
+				if (needle instanceof DisplayElement) {
+					needle.rotation = 15;
+				}
+
+				go.tr.position.x = 32;
+				go.tr.position.y = 32;
+				this.pushGameObject(go);
+			};
+			for (let i = 0; i < 6; i++) {
+				func(i);
+			}
 		}
 
+		// {
+		// 	var waitPosArr = this.waitPosArr;
+		// 	this.btnPotArr = [];
+		// 	waitPosArr.forEach((_item, _i) => {
+		// 		this.createCustomer();
+		// 	});
+		// }
+
 		{
-			var potPosArr = [
+			var waitPosArr = [
 				[4, 96],
 				[44, 96],
 				[84, 96],
@@ -217,7 +227,7 @@ class HogeScene {
 				[204, 96],
 			];
 			this.btnPotArr = [];
-			potPosArr.forEach((_item, _i) => {
+			waitPosArr.forEach((_item, _i) => {
 				const sprite = Sprite("obj_chair");
 				sprite.addChildTo(pScene);
 				var go = new GameObject();
@@ -238,7 +248,7 @@ class HogeScene {
 		}
 
 		{
-			var potPosArr = [
+			var waitPosArr = [
 				[4, 136],
 				[44, 136],
 				[84, 136],
@@ -247,7 +257,7 @@ class HogeScene {
 				[204, 136],
 			];
 			this.btnPotArr = [];
-			potPosArr.forEach((_item, _i) => {
+			waitPosArr.forEach((_item, _i) => {
 				const sprite = Sprite("obj_tray");
 				sprite.addChildTo(pScene);
 				var go = new GameObject();
@@ -276,7 +286,7 @@ class HogeScene {
 			const btnBank = Sprite("obj_bank");
 			btnBank.addChildTo(pScene);
 			var go = new GameObject();
-			go.bank = new Bank();
+			go.bank = new Bank(go);
 			go.tr.position.x = 8 + 16;
 			go.tr.position.y = 256 + 16;
 			go.sprite = btnBank;
@@ -285,11 +295,12 @@ class HogeScene {
 			go.sprite.addEventListener("pointstart", () => {
 				this.lastPointBtn = go;
 			});
-			this.goArr.push(go);
+			this.pushGameObject(go);
+			this.bank = go.bank;
 		}
 
 		{
-			var potPosArr = [
+			var waitPosArr = [
 				[120, 208],
 				[160, 208],
 				[200, 208],
@@ -298,7 +309,7 @@ class HogeScene {
 				[200, 248],
 			];
 			this.btnPotArr = [];
-			potPosArr.forEach((_item, _i) => {
+			waitPosArr.forEach((_item, _i) => {
 				const btnPot = Sprite("obj_pot");
 				btnPot.addChildTo(pScene);
 				var go = new GameObject();
@@ -350,7 +361,7 @@ class HogeScene {
 			const label = new Label({
 				text: '',
 				fill: '#ffffff',
-				fontSize: 20,
+				fontSize: 24,
 				fontFamily: 'monospaced',
 				align: 'center',
 			});
@@ -375,10 +386,86 @@ class HogeScene {
 		});
 	}
 
+	createNoodle() {
+		var go = new GameObject();
+		go.noodle = new Noodle(go);
+		go.sprite = Sprite("obj_noodle_01");
+		go.sprite.addChildTo(this.scene);
+		SpriteHelper.setPriority(go.sprite, 30);
+		this.pushGameObject(go);
+		return go.noodle;
+	}
+
+	createCustomer() {
+		const sprite = Sprite("obj_customer");
+		sprite.addChildTo(this.scene);
+		var go = new GameObject();
+		go.sprite = sprite;
+		go.anim = FrameAnimation("obj_customer").attachTo(go.sprite);
+		go.anim.gotoAndPlay("idle");
+		SpriteHelper.setPriority(go.sprite, 20);
+		go.customer = new Customer(go);
+		go.customer.waitIndex = this.standWaitPosArr.length;
+		go.customer.orderedBoilLv = 1;
+		go.customer.state = CustomerState.STAND_WAIT;
+		go.tr.position.x = -32;
+		go.tr.position.y = 32;
+		this.goArr.push(go);
+		this.btnPotArr.push(go);
+		sprite.setInteractive(true, sprite.boundingType);
+		sprite.addEventListener("pointstart", () => {
+			this.lastPointBtn = go;
+		});
+		return go.customer;
+	}
+
+	pushGameObject(go: GameObject) {
+		this.goArr.push(go);
+		this.goDict[go.instanceId] = go;
+	}
+
+	findComponents<T>(func: (go: GameObject) => T | null, arr: T[] | null = null): T[] {
+		arr = arr || [];
+		for (let i = 0; i < this.goArr.length; i++) {
+			const go = this.goArr[i];
+			const component = func(go);
+			if (component === null) continue;
+			arr.push(component);
+		}
+		return arr;
+	}
+
+	findGameObjects(func: (go: GameObject) => boolean, arr: GameObject[] | null = null): GameObject[] {
+		arr = arr || [];
+		for (let i = 0; i < this.goArr.length; i++) {
+			const go = this.goArr[i];
+			if (!func(go)) continue;
+			arr.push(go);
+		}
+		return arr;
+	}
+
+	getGameObject(goId: number): GameObject {
+		var go = this.goArr.find((_elem) => {
+			if (_elem.instanceId !== goId) return false;
+			return true;
+		});
+		return go;
+	}
+
+	findGameObject(goId: number, func: Function | null = null) {
+		var go = this.goArr.find((_elem) => {
+			if (_elem.instanceId !== goId) return false;
+			return true;
+		});
+		if (func && !func(go)) return null;
+		return go;
+	}
+
 	static state1(self: HogeScene, evt: StateEvent) {
 		if (evt.sm.time === 0) {
-			self.centerTelop.text = 'ラーメン\n(クリックで開始)';
-			self.centerTelop.fill = '#444444';
+			self.centerTelop.text = 'ラーメン修行\n(クリックで開始)';
+			self.centerTelop.fill = '#ffffff';
 		}
 
 		if (1000 <= evt.sm.time) {
@@ -395,7 +482,7 @@ class HogeScene {
 			self.isStarted = true;
 		}
 
-		if (self.playerHp <= 0) {
+		if (self.questWork.getRestTime() <= 0) {
 			return HogeScene.stateGameOver;
 		}
 		if (evt.app.keyboard.getKeyDown('g')) {
@@ -405,142 +492,9 @@ class HogeScene {
 			return HogeScene.stateExit;
 		}
 
-		self.goArr.forEach((_go) => {
-			if (_go.noodle) {
-				const noodle = _go.noodle;
-				const onwerGO = self.goArr.find((_elem) => {
-					if (_elem.instanceId !== noodle.ownerId) return false;
-					return true;
-				});
-				if (onwerGO) {
-					const dx = onwerGO.tr.position.x - _go.tr.position.x;
-					const dy = onwerGO.tr.position.y - _go.tr.position.y;
-					const mx = dx * 8 * evt.app.deltaTime / 1000;
-					const my = dy * 8 * evt.app.deltaTime / 1000;
-					_go.tr.position.x += mx;
-					_go.tr.position.y += my;
-				}
-			}
-			if (_go.customer) {
-				const customer = _go.customer;
-				var nextState = 0;
-				switch (customer.state) {
-					case CustomerState.STAND_WAIT:
-						if (customer.chairId) {
-							nextState = CustomerState.MOVE;
-							break;
-						}
-						break;
-					case CustomerState.MOVE: {
-						if (customer.stateTime === 0) {
-						}
-						const duration = 1000;
-						const progress = MathHelper.progress01(customer.stateTime, duration);
-
-						const chairGO = self.goArr.find((_elem) => {
-							if (_elem.instanceId !== customer.chairId) return false;
-							return true;
-						});
-
-						const dx = chairGO.tr.position.x - _go.tr.position.x;
-						const dy = chairGO.tr.position.y - _go.tr.position.y;
-						const mx = dx * 4 * evt.app.deltaTime / 1000;
-						const my = dy * 4 * evt.app.deltaTime / 1000;
-						_go.tr.position.x += mx;
-						_go.tr.position.y += my;
-
-
-						if (1 <= progress) {
-							nextState = CustomerState.THINK;
-							Vector2Helper.copyFrom(_go.tr.position, chairGO.tr.position);
-
-							const trayGO = self.goArr.find((_elem) => {
-								if (!_elem.tray) return false;
-								if (_elem.tray.chairId !== chairGO.instanceId) return false;
-								return true;
-							});
-							customer.trayId = trayGO.instanceId;
-
-							break;
-						}
-						break;
-					}
-					case CustomerState.THINK: {
-						if (customer.stateTime === 0) {
-						}
-						const duration = 1000;
-						const progress = MathHelper.progress01(customer.stateTime, duration);
-						if (1 <= progress) {
-							nextState = CustomerState.CHAIR_WAIT;
-							break;
-						}
-						break;
-					}
-					case CustomerState.CHAIR_WAIT: {
-						if (customer.stateTime === 0) {
-							const go = new GameObject();
-							go.effect = new Effect();
-							go.effect.duration = 2000;
-							go.sprite = Sprite("order_01");
-							go.sprite.addChildTo(self.scene);
-							SpriteHelper.setPriority(go.sprite, 40);
-							go.tr.position.x = _go.tr.position.x;
-							go.tr.position.y = _go.tr.position.y - 32;
-							self.goArr.push(go);
-
-						}
-						const noodle = self.goArr.find((_elem) => {
-							if (!_elem.noodle) return false;
-							return _elem.noodle.ownerId === customer.trayId;
-						});
-						if (noodle) {
-							nextState = CustomerState.EAT;
-							break;
-						}
-						break;
-					}
-					case CustomerState.EAT: {
-						if (customer.stateTime === 0) {
-						}
-						const duration = 1000;
-						const progress = MathHelper.progress01(customer.stateTime, duration);
-						if (1 <= progress) {
-							const noodle = self.goArr.find((_elem) => {
-								if (!_elem.noodle) return false;
-								return _elem.noodle.ownerId === customer.trayId;
-							});
-							if (noodle) {
-								noodle.hasDelete = true;
-							}
-							nextState = CustomerState.EXIT_SHOP;
-							break;
-						}
-						break;
-					}
-					case CustomerState.EXIT_SHOP: {
-						if (customer.stateTime === 0) {
-						}
-						const duration = 1000;
-						const progress = MathHelper.progress01(customer.stateTime, duration);
-						if (1 <= progress) {
-							_go.hasDelete = true;
-							break;
-						}
-						break;
-					}
-				}
-				if (nextState !== 0) {
-					customer.state = nextState;
-					customer.stateTime = 0;
-				} else {
-					customer.stateTime += evt.app.deltaTime;
-				}
-			}
-		});
-
-		const playerGO = self.player;
-		if (playerGO.player === null) return;
-		const player: Player = playerGO.player;
+		const playerGO = self.getGameObject(self.player.entityId);
+		const player = self.player;
+		const bankGO = self.getGameObject(self.bank.entityId);
 
 		if (self.lastPointBtn !== null) {
 			const lastGO = self.lastPointBtn;
@@ -550,17 +504,26 @@ class HogeScene {
 					return _elem.instanceId === chairId;
 				});
 
-				if (lastGO.customer.state === CustomerState.STAND_WAIT) {
-					playerGO.player.selectedCustomerId = lastGO.instanceId;
-					playerGO.player.selectedBankId = 0;
-					playerGO.player.selectedPotId = 0;
+				if (lastGO.customer.state === CustomerState.STAND_WAIT || lastGO.customer.state === CustomerState.CHAIR_WAIT) {
+					if (player.selectedBankId !== 0) {
+						// 麺箱の麺を客に投げる.
+						const noodle = self.createNoodle();
+						const noodleGO = self.getGameObject(noodle.entityId);
+						noodle.ownerId = lastGO.instanceId;
+						Vector2Helper.copyFrom(noodleGO.tr.position, bankGO.tr.position);
+					} else if (player.selectedNoodleId !== 0) {
+						// 鍋の麺を客に投げる.
+						const noodleGO = self.getGameObject(player.selectedNoodleId);
+						if (noodleGO.noodle !== null) {
+							noodleGO.noodle.ownerId = lastGO.instanceId;
+						}
+					}
+					player.selectedCustomerId = lastGO.instanceId;
+					player.selectedBankId = 0;
+					player.selectedPotId = 0;
+					player.selectedNoodleId = 0;
 					self.cursor.x = lastGO.tr.position.x;
 					self.cursor.y = lastGO.tr.position.y;
-				}
-
-				if (chair) {
-
-				} else {
 				}
 			} else if (lastGO.chair) {
 				const customerOnChair = self.goArr.find((_elem) => {
@@ -575,7 +538,7 @@ class HogeScene {
 				});
 				if (selectedCustomer && selectedCustomer.customer && !customerOnChair) {
 					// 客を席に配置.
-					playerGO.player.selectedChairId = lastGO.instanceId;
+					player.selectedChairId = lastGO.instanceId;
 					selectedCustomer.customer.chairId = lastGO.instanceId;
 					self.cursor.x = lastGO.tr.position.x;
 					self.cursor.y = lastGO.tr.position.y;
@@ -589,44 +552,43 @@ class HogeScene {
 
 				if (noodleGO && noodleGO.noodle) {
 					// 麺をトレーに置く.
-					playerGO.player.selectedNoodleId = 0;
-					playerGO.player.selectedBankId = 0;
-					playerGO.player.selectedCustomerId = 0;
-					playerGO.player.selectedPotId = 0;
-					playerGO.player.selectedTrayId = lastGO.instanceId;
+					player.selectedNoodleId = 0;
+					player.selectedBankId = 0;
+					player.selectedCustomerId = 0;
+					player.selectedPotId = 0;
+					player.selectedTrayId = lastGO.instanceId;
 					// self.cursor.x = lastGO.tr.position.x;
 					// self.cursor.y = lastGO.tr.position.y;
 					noodleGO.noodle.ownerId = lastGO.instanceId;
+					if (noodleGO.sprite instanceof Sprite) {
+						noodleGO.sprite.image = "obj_noodle_02";
+					}
 					//Vector2Helper.copyFrom(noodleGO.tr.position, lastGO.tr.position);
-				} else if (playerGO.player.selectedBankId !== 0) {
+				} else if (player.selectedBankId !== 0) {
 					// 素麺をトレーに置く.
 					const bankGO = self.goArr.find((_elem) => {
 						if (_elem.instanceId !== player.selectedBankId) return false;
 						return true;
 					});
-					playerGO.player.selectedNoodleId = 0;
-					playerGO.player.selectedBankId = 0;
-					playerGO.player.selectedCustomerId = 0;
-					playerGO.player.selectedPotId = 0;
-					playerGO.player.selectedTrayId = lastGO.instanceId;
+					player.selectedNoodleId = 0;
+					player.selectedBankId = 0;
+					player.selectedCustomerId = 0;
+					player.selectedPotId = 0;
+					player.selectedTrayId = lastGO.instanceId;
 					self.cursor.x = lastGO.tr.position.x;
 					self.cursor.y = lastGO.tr.position.y;
 
-					var go = new GameObject();
-					go.noodle = new Noodle();
-					go.noodle.ownerId = lastGO.instanceId;
-					go.sprite = Sprite("obj_noodle");
-					go.sprite.addChildTo(self.scene);
-					SpriteHelper.setPriority(go.sprite, 30);
+					const noodle = self.createNoodle();
+					const go = self.getGameObject(noodle.entityId);
+					noodle.ownerId = lastGO.instanceId;
 					Vector2Helper.copyFrom(go.tr.position, bankGO.tr.position);
-					self.goArr.push(go);
 				}
 			} else if (lastGO.bank) {
 				// 麺を持つ.
-				playerGO.player.selectedBankId = self.lastPointBtn.instanceId;
-				playerGO.player.selectedCustomerId = 0;
-				playerGO.player.selectedPotId = 0;
-				playerGO.player.selectedNoodleId = 0;
+				player.selectedBankId = self.lastPointBtn.instanceId;
+				player.selectedCustomerId = 0;
+				player.selectedPotId = 0;
+				player.selectedNoodleId = 0;
 
 				self.cursor.x = lastGO.tr.position.x;
 				self.cursor.y = lastGO.tr.position.y;
@@ -635,10 +597,10 @@ class HogeScene {
 					if (_elem.instanceId !== player.selectedBankId) return false;
 					return true;
 				});
-				playerGO.player.selectedBankId = 0;
-				playerGO.player.selectedCustomerId = 0;
-				playerGO.player.selectedNoodleId = 0;
-				playerGO.player.selectedPotId = self.lastPointBtn.instanceId;
+				player.selectedBankId = 0;
+				player.selectedCustomerId = 0;
+				player.selectedNoodleId = 0;
+				player.selectedPotId = self.lastPointBtn.instanceId;
 
 				self.cursor.x = lastGO.tr.position.x;
 				self.cursor.y = lastGO.tr.position.y;
@@ -657,19 +619,15 @@ class HogeScene {
 						noodleInPot.hasDelete = true;
 					}
 					// 麺を茹でる.
-					var go = new GameObject();
-					go.noodle = new Noodle();
-					go.noodle.ownerId = self.lastPointBtn.instanceId;
-					go.sprite = Sprite("obj_noodle");
-					go.sprite.addChildTo(self.scene);
-					SpriteHelper.setPriority(go.sprite, 30);
+					var noodle = self.createNoodle();
+					var go = self.getGameObject(noodle.entityId);
+					noodle.ownerId = self.lastPointBtn.instanceId;
 					Vector2Helper.copyFrom(go.tr.position, bankGO.tr.position);
-					self.goArr.push(go);
-					playerGO.player.selectedNoodleId = go.instanceId;
+					player.selectedNoodleId = go.instanceId;
 				} else {
 					// 麺を持つ.
 					if (noodleInPot) {
-						playerGO.player.selectedNoodleId = noodleInPot.instanceId;
+						player.selectedNoodleId = noodleInPot.instanceId;
 					}
 				}
 			}
@@ -714,7 +672,6 @@ class HogeScene {
 
 	static stateGameOver(self: HogeScene, evt: StateEvent) {
 		if (evt.sm.time === 0) {
-			self.playerHp = 0;
 			self.isEnd = true;
 			self.centerTelop.text = 'GAME OVER';
 		}
@@ -726,7 +683,7 @@ class HogeScene {
 
 	static stateGameOver2(self: HogeScene, evt: StateEvent) {
 		if (evt.sm.time === 0) {
-			self.centerTelop.text = `GAME OVER\nSCORE ${self.score}`;
+			self.centerTelop.text = `GAME OVER\nSCORE ${self.player.score}`;
 		}
 		if (3000 <= evt.sm.time) {
 			if (evt.app.pointer.getPointingStart()) {
@@ -753,50 +710,6 @@ class HogeScene {
 		v1.x = (v1.x * centerRect.width * 0.5) + centerRect.centerX;
 		v1.y = (v1.y * centerRect.height * 0.5) + centerRect.centerY;
 		return v1;
-	}
-
-	calcScore(questWork: QuestWork, noteArr: INoteData[], lineIndex: number, startTime: number, posArr: Vector2[]) {
-		const result = {
-			score: 0,
-			text: '',
-		};
-		if (!MathHelper.isInRange(lineIndex, 0, noteArr.length)) return result;
-		const note = noteArr[lineIndex];
-		const timeSpan = MidiHelper.tickToMsec(questWork.getBpm(), questWork.getQuestData().bpqn, note.time) - startTime;
-		const tThreshold = 500;
-		const timeSpan2 = Math.abs(timeSpan);
-		if (tThreshold <= timeSpan2) return result;
-
-		const dThreshold = 0.2;
-
-		const centerRect = this.centerRect;
-		let v1 = posArr[0].clone();
-		let v2 = posArr[posArr.length - 1].clone();
-		v1 = HogeScene.normalizePosition(centerRect, v1);
-		v2 = HogeScene.normalizePosition(centerRect, v2);
-		const startD = Vector2(note.startX, note.startY).distance(v1);
-		const endD = Vector2(note.endX, note.endY).distance(v2);
-
-		const score1 = Math.max(tThreshold - timeSpan2, 0) / tThreshold;
-		const score2 = Math.max(dThreshold - startD, 0) / dThreshold;
-		const score3 = Math.max(dThreshold - endD, 0) / dThreshold;
-		const total = (score1 + score2 + score3) / 3.0;
-		let text = '';
-		if (total < 0.2) {
-			text = 'D';
-		} else if (total < 0.4) {
-			text = 'C';
-		} else if (total < 0.6) {
-			text = 'B';
-		} else if (total < 0.8) {
-			text = 'A';
-		} else {
-			text = 'S';
-		}
-
-		result.text = text;
-		result.score = Math.floor(total * 3000);
-		return result;
 	}
 
 	static isHit(a: GameObject, b: GameObject) {
@@ -848,42 +761,438 @@ class HogeScene {
 		});
 	}
 
+	waveArr = [
+		// type 1: 客
+		// type 2: 客消化の待機
+		// time, type, boilLv
+		[500, 1, 1],
+
+		[0, 2, 0],
+
+		[500, 1, 3],
+		[500, 1, 2],
+
+		[0, 2, 0],
+
+		[500, 1, 1],
+		[500, 1, 2],
+		[500, 1, 3],
+
+		[0, 2, 0],
+
+		[500, 1, 1],
+		[500, 1, 2],
+		[500, 1, 1],
+		[5000, 1, 2],
+		[500, 1, 1],
+		[2000, 1, 2],
+
+		[0, 2, 0],
+
+		[500, 1, 3],
+		[10000, 1, 3],
+		[500, 1, 3],
+		[500, 1, 3],
+		[500, 1, 3],
+		[500, 1, 3],
+
+		[5000, 1, 1],
+		[500, 1, 2],
+		[5000, 1, 1],
+		[500, 1, 2],
+		[5000, 1, 1],
+		[500, 1, 2],
+
+		[0, 2, 0],
+
+		[500, 1, 1],
+		[500, 1, 3],
+		[5000, 1, 3],
+		[500, 1, 2],
+		[500, 1, 2],
+		[500, 1, 3],
+
+	];
+
+	updateQuest(app: GameApp) {
+		if (!this.isStarted || this.isEnd) return;
+
+		if (this.questWork.waveIndex < this.waveArr.length) {
+			const wave = this.waveArr[this.questWork.waveIndex];
+			const waveTime = wave[0];
+			const waveType = wave[1];
+			const waveBoilLv = wave[2];
+			if (waveTime <= this.questWork.waveTime) {
+				switch (waveType) {
+					case 1: {
+						const waitingCustomerArr = this.findComponents((_go) => {
+							if (_go.customer === null) return null;
+							if (_go.customer.waitIndex === -1) return null;
+							return _go.customer;
+						});
+
+						if (this.standWaitPosArr.length <= waitingCustomerArr.length) {
+							break;
+						}
+						const customer = this.createCustomer();
+						customer.orderedBoilLv = waveBoilLv;
+						this.questWork.waveTime = 0;
+						this.questWork.waveIndex++;
+						break;
+					}
+					case 2:
+						const customerArr = this.findComponents((_go) => {
+							return _go.customer;
+						});
+						if (0 < customerArr.length) {
+							break;
+						}
+						this.questWork.waveTime = 0;
+						this.questWork.waveIndex++;
+						break;
+				}
+			}
+		}
+
+		this.questWork.waveTime += app.deltaTime;
+		this.questWork.time += app.deltaTime;
+	}
+
+	static boilLvToTime(boilLv: number) {
+		return boilLv * 5000;
+	}
+
+	static boilTimeToTimerRotation(boilTime: number) {
+		return boilTime / (5000 * 4) * 360;
+	}
+
 	enterframe(evt: EnterFrameEvent) {
 		const app = evt.app;
 		const myScene = this;
+		const self = this;
 		const questWork = myScene.questWork;
 
 		myScene.sm.update(myScene, app);
 
-		//		myScene.updateQuest(myScene, app);
+		myScene.updateQuest(app);
 		const goArr = myScene.goArr;
+
 
 		myScene.updateShaker(myScene, app);
 
-		if (myScene.playerHasDamage) {
-			myScene.playerHasDamage = false;
-			if (0 < myScene.playerHp) {
-				myScene.playerHp -= 1;
+		const customerArr = self.findComponents((_go) => _go.customer);
+		customerArr.forEach((customer) => {
+			var _go = self.getGameObject(customer.entityId);
+			var nextState = 0;
+			switch (customer.state) {
+				case CustomerState.ENTER_SHOP: {
+					_go.tr.position.x = this.customerEnterPos.x;
+					_go.tr.position.y = this.customerEnterPos.y;
+					customer.waitIndex = self.standWaitPosArr.length;
+
+					// 次の枠を探す.
+					const nextIndex = customer.waitIndex - 1;
+					let hasNextIndex = true;
+					for (var i = 0; i < customerArr.length; i++) {
+						const other = customerArr[i];
+						if (other.waitIndex !== nextIndex) continue;
+						hasNextIndex = false;
+						break;
+					}
+					if (hasNextIndex) {
+						customer.waitIndex = nextIndex;
+						customer.state = CustomerState.STAND_WAIT;
+						break;
+					}
+				}
+				case CustomerState.STAND_WAIT:
+					if (0 < customer.chairId) {
+						customer.waitIndex = -1;
+						nextState = CustomerState.MOVE;
+						break;
+					}
+
+					{
+						// 客にぶつかる麺を取得.
+						const noodleArr = self.findComponents((_go2) => {
+							if (_go2.noodle === null) return null;
+							if (_go2.noodle.ownerId !== _go.instanceId) return null;
+							return _go2.noodle;
+						});
+						if (0 < noodleArr.length) {
+							nextState = CustomerState.EAT;
+							break;
+						}
+					}
+					// 次の枠を探す.
+					if (0 < customer.waitIndex) {
+						const nextIndex = customer.waitIndex - 1;
+						let hasNextIndex = true;
+						for (var i = 0; i < customerArr.length; i++) {
+							const otherCustomer = customerArr[i];
+							if (otherCustomer.waitIndex !== nextIndex) continue;
+							hasNextIndex = false;
+							break;
+						}
+						if (hasNextIndex) {
+							customer.waitIndex = nextIndex;
+						}
+					}
+					var posItem = self.standWaitPosArr[customer.waitIndex];
+					Vector2Helper.setMoveTo(_go.tr.position, posItem, 200 * evt.app.deltaTime / 1000);
+					break;
+				case CustomerState.MOVE: {
+					if (customer.stateTime === 0) {
+					}
+					const duration = 1000;
+					const progress = MathHelper.progress01(customer.stateTime, duration);
+
+					const chairGO = self.goArr.find((_elem) => {
+						if (_elem.instanceId !== customer.chairId) return false;
+						return true;
+					});
+
+					Vector2Helper.setMoveTo(_go.tr.position, chairGO.tr.position, 200 * evt.app.deltaTime / 1000);
+
+					if (1 <= progress) {
+						nextState = CustomerState.THINK;
+						Vector2Helper.copyFrom(_go.tr.position, chairGO.tr.position);
+
+						const trayGO = self.goArr.find((_elem) => {
+							if (!_elem.tray) return false;
+							if (_elem.tray.chairId !== chairGO.instanceId) return false;
+							return true;
+						});
+						customer.trayId = trayGO.instanceId;
+
+						break;
+					}
+					break;
+				}
+				case CustomerState.THINK: {
+					if (customer.stateTime === 0) {
+					}
+					const noodle = self.goArr.find((_elem) => {
+						if (!_elem.noodle) return false;
+						return _elem.noodle.ownerId === customer.trayId;
+					});
+					if (noodle !== null) {
+						nextState = CustomerState.EAT;
+						break;
+					}
+					const duration = 500;
+					const progress = MathHelper.progress01(customer.stateTime, duration);
+					if (1 <= progress) {
+						nextState = CustomerState.CHAIR_WAIT;
+						break;
+					}
+					break;
+				}
+				case CustomerState.CHAIR_WAIT: {
+					if (customer.stateTime === 0) {
+						const go = new GameObject();
+						go.effect = new Effect();
+						go.effect.duration = 3000;
+						go.sprite = Sprite("order_0" + customer.orderedBoilLv);
+						go.sprite.addChildTo(self.scene);
+						SpriteHelper.setPriority(go.sprite, 40);
+						go.tr.position.x = _go.tr.position.x;
+						go.tr.position.y = _go.tr.position.y - 32;
+						self.pushGameObject(go);
+					}
+					const noodle = self.goArr.find((_elem) => {
+						if (!_elem.noodle) return false;
+						return _elem.noodle.ownerId === customer.trayId;
+					});
+					if (noodle !== null && noodle.noodle !== null) {
+						nextState = CustomerState.EAT;
+						break;
+					}
+					{
+						// 客にぶつかる麺を取得.
+						const noodleArr = self.findComponents((_go2) => {
+							if (_go2.noodle === null) return null;
+							if (_go2.noodle.ownerId !== _go.instanceId) return null;
+							return _go2.noodle;
+						});
+						if (0 < noodleArr.length) {
+							nextState = CustomerState.EAT;
+							break;
+						}
+					}
+					break;
+				}
+				case CustomerState.EAT: {
+					let noodle: GameObject | null = self.goArr.find((_elem) => {
+						if (!_elem.noodle) return false;
+						return _elem.noodle.ownerId === customer.trayId;
+					});
+					{
+						// 客にぶつかる麺を取得.
+						const noodleArr = self.findComponents((_go2) => {
+							if (_go2.noodle === null) return null;
+							if (_go2.noodle.ownerId !== _go.instanceId) return null;
+							return _go2.noodle;
+						});
+						if (0 < noodleArr.length) {
+							noodle = self.getGameObject(noodleArr[0].entityId);
+						}
+					}
+
+					if (customer.stateTime === 0) {
+						if (noodle !== null && noodle.noodle !== null) {
+							var boiledTime = noodle.noodle.boiledTime;
+							const boilDelta = boiledTime - HogeScene.boilLvToTime(customer.orderedBoilLv);
+							const boilDistance = Math.abs(boilDelta);
+							const boilThreshold1 = 2500;
+							const boilThreshold2 = 5000;
+							let reactionLv = 1;
+							if (boiledTime <= 0) {
+								// オエー!
+								customer.reactionLv = 1;
+							} else if (boilDistance < boilThreshold1) {
+								// うまい!
+								customer.reactionLv = 3;
+							} else if (boilDistance < boilThreshold2) {
+								// まずい!
+								customer.reactionLv = 2;
+							} else {
+								// オエー!
+								customer.reactionLv = 1;
+							}
+						}
+					}
+
+					const duration = 2000;
+					const progress = MathHelper.progress01(customer.stateTime, duration);
+					if (1 <= progress) {
+						if (noodle !== null) {
+							noodle.hasDelete = true;
+						}
+						nextState = CustomerState.EXIT_SHOP;
+						break;
+					}
+					break;
+				}
+				case CustomerState.EXIT_SHOP: {
+					if (customer.stateTime === 0) {
+						let score = 0;
+						switch (customer.reactionLv) {
+							case 1:
+								score += 10;
+								break;
+							case 2:
+								score += 200;
+								break;
+							case 3:
+							default:
+								score += 500;
+								break;
+						}
+
+						if (score !== 0 && !this.isEnd) {
+							this.player.score += score;
+						}
+
+						{
+							const go = new GameObject();
+							go.effect = new Effect();
+							go.effect.duration = 1000;
+							go.sprite = Sprite("reaction_0" + customer.reactionLv);
+							go.sprite.addChildTo(self.scene);
+							SpriteHelper.setPriority(go.sprite, 40);
+							go.tr.position.x = _go.tr.position.x;
+							go.tr.position.y = _go.tr.position.y - 32;
+							self.pushGameObject(go);
+						}
+					}
+					const duration = 2000;
+					const progress = MathHelper.progress01(customer.stateTime, duration);
+
+					Vector2Helper.setMoveTo(_go.tr.position, this.customerEnterPos, 200 * evt.app.deltaTime / 1000);
+
+					if (1 <= progress) {
+						_go.hasDelete = true;
+						break;
+					}
+					break;
+				}
+			}
+			if (nextState !== 0) {
+				customer.state = nextState;
+				customer.stateTime = 0;
+			} else {
+				customer.stateTime += evt.app.deltaTime;
+			}
+		});
+
+
+		self.goArr.forEach((_go) => {
+			if (_go.noodle) {
+				const noodle = _go.noodle;
+				const onwerGO = self.goArr.find((_elem) => {
+					if (_elem.instanceId !== noodle.ownerId) return false;
+					return true;
+				});
+				if (onwerGO === null) {
+					_go.hasDelete = true;
+				} else {
+					const dx = onwerGO.tr.position.x - _go.tr.position.x;
+					const dy = onwerGO.tr.position.y - _go.tr.position.y;
+					const mx = dx * 8 * evt.app.deltaTime / 1000;
+					const my = dy * 8 * evt.app.deltaTime / 1000;
+					_go.tr.position.x += mx;
+					_go.tr.position.y += my;
+				}
+			}
+			if (_go.noodle) {
+				const noodleOwnerGO = self.findGameObject(_go.noodle.ownerId);
+				if (noodleOwnerGO && noodleOwnerGO.pot) {
+					_go.noodle.boiledTime += evt.app.deltaTime;
+				}
+			}
+
+		});
+
+		{
+			const potArr = [];
+			const noodleArr = [];
+			const timerArr = [];
+			for (var i = 0, j = 0; i < this.goArr.length; i++) {
+				const go = this.goArr[i];
+				if (!go.noodle) continue;
+				const noodleOwner = this.findGameObject(go.noodle.ownerId);
+				if (!noodleOwner) continue;
+				if (!noodleOwner.pot) continue;
+				potArr.push(noodleOwner);
+				noodleArr.push(go);
+			}
+
+			for (var i = 0; i < this.goArr.length; i++) {
+				const go = this.goArr[i];
+				if (!go.noodleTimer) continue;
+				timerArr.push(go);
+			}
+
+			for (var i = 0; i < timerArr.length; i++) {
+				const timerGO = timerArr[i];
+				const potGO = potArr[i];
+				const noodleGO = noodleArr[i];
+				if (!timerGO.sprite) continue;
+				if (!potGO) {
+					timerGO.sprite.alpha = 0;
+					continue;
+				}
+				if (!noodleGO.noodle) continue;
+				timerGO.sprite.alpha = 1;
+				const needle = timerGO.sprite.getChildAt(1);
+				if (needle instanceof DisplayElement) {
+					needle.rotation = HogeScene.boilTimeToTimerRotation(noodleGO.noodle.boiledTime);
+				}
+				timerGO.tr.position.x = potGO.tr.position.x - 16;
+				timerGO.tr.position.y = potGO.tr.position.y - 16;
 			}
 		}
-		// // Bullet.
-		// goArr.forEach(go => {
-		// 	const bullet = go.bullet;
-		// 	if (!bullet) return;
-		// 	const vec = bullet.vec;
-		// 	go.sprite.position += vec * app.ticker.deltaTime / 1000;
-		// 	if (!MathHelper.isInRange(go.sprite.position, myScene.stageLeft, myScene.stageRight)) {
-		// 		go.hasDelete = true;
-		// 	}
-		// });
-
-		// // Life.
-		// goArr.forEach(go => {
-		// 	const life = go.life;
-		// 	if (!life) return;
-		// 	if (0 < life.hp) return;
-		// 	go.hasDelete = true;
-		// });
 
 		// Effect.
 		goArr.forEach(go => {
@@ -959,9 +1268,8 @@ class HogeScene {
 		});
 
 		var text = '';
-		text += 'SCORE: ' + myScene.score;
-		text += ' LIFE: ' + '■'.repeat(myScene.playerHp);
-		// text += '\nDEBUG LOOP: ' + questWork.loopCount + ` T1: ${questWork.barTime} T2: ${questWork.time}`;
+		text += 'SCORE: ' + this.player.score;
+		text += ' TIME: ' + (this.questWork.getRestTime() / 1000).toFixed(1);
 		myScene.mainLabel.text = text;
 
 	}

@@ -1,0 +1,17 @@
+{
+	
+	"frame": {
+		"width": 32,
+		"height": 32,
+		"cols": 2,
+		"rows": 1
+	},
+
+	"animations": {
+			"idle": {
+				"frames": [ 0, 1 ],
+				"frequency": 12,
+				"next": "idle"
+			}
+	}
+}
