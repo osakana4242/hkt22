@@ -478,6 +478,7 @@ class HogeScene {
                     return _elem.instanceId === chairId;
                 });
                 if (lastGO.customer.state === CustomerState.STAND_WAIT || lastGO.customer.state === CustomerState.CHAIR_WAIT) {
+                    player.selectedCustomerId = 0;
                     if (player.selectedBankId !== 0) {
                         // 麺箱の麺を客に投げる.
                         const noodle = self.createNoodle();
@@ -492,12 +493,19 @@ class HogeScene {
                             noodleGO.noodle.ownerId = lastGO.instanceId;
                         }
                     }
-                    player.selectedCustomerId = lastGO.instanceId;
+                    else {
+                        player.selectedCustomerId = lastGO.instanceId;
+                    }
                     player.selectedBankId = 0;
                     player.selectedPotId = 0;
                     player.selectedNoodleId = 0;
-                    self.cursor.x = lastGO.tr.position.x;
-                    self.cursor.y = lastGO.tr.position.y;
+                    if (player.selectedCustomerId === 0) {
+                        self.cursor.x = -240;
+                    }
+                    else {
+                        self.cursor.x = lastGO.tr.position.x;
+                        self.cursor.y = lastGO.tr.position.y;
+                    }
                 }
             }
             else if (lastGO.chair) {
@@ -603,7 +611,8 @@ class HogeScene {
                     var go = self.getGameObject(noodle.entityId);
                     noodle.ownerId = self.lastPointBtn.instanceId;
                     Vector2Helper.copyFrom(go.tr.position, bankGO.tr.position);
-                    player.selectedNoodleId = go.instanceId;
+                    player.selectedNoodleId = 0; // go.instanceId;
+                    self.cursor.x = -240;
                 }
                 else {
                     // 麺を持つ.
